@@ -42,6 +42,13 @@ export function personasOf(e: Pick<Expense, 'personas' | 'deudores' | 'ajeno' | 
   return ps;
 }
 
+// Invitación de verdad: con personas apuntadas, solo si todas van invitadas (nadie debe nada);
+// sin personas, lo que diga la casilla. Así un gasto con deudores nunca sale como invitación.
+export function isInvitation(e: Pick<Expense, 'invitacion' | 'personas' | 'deudores' | 'ajeno' | 'devuelto' | 'deudaMetodo'>): boolean {
+  const ps = personasOf(e).filter(p => p.n.trim());
+  return ps.length ? ps.every(p => p.r === 'inv') : !!e.invitacion;
+}
+
 // Campos globales derivados de las devoluciones por persona (todos devueltos / primer método devuelto).
 export function repaySummary(ps: Persona[]): { devuelto: 'yes' | 'no'; deudaMetodo: string } {
   const debtors = ps.filter(p => p.r === 'deb');

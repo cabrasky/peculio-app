@@ -1121,6 +1121,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 .split-sum > div span:last-child { color: var(--text); font-weight: 700; }
 .split-sum .owed { color: var(--warn-fg) !important; }
 .split-sum .treat { color: var(--ok-fg) !important; }
+.split-sum .split-note { margin: 6px 0 0; font-size: 12.5px; font-weight: 700; color: var(--ok-fg); }
 .split-sum hr { border: none; border-top: 1px solid var(--border-strong); margin: 6px 0; }
 .split-sum .mine { align-items: center; color: var(--primary); font-weight: 800; }
 .split-sum .mine span:last-child { font-family: var(--font-display); font-size: 22px; color: var(--primary); }

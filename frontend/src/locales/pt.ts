@@ -413,6 +413,8 @@ const pt: Record<TKey, string> = {
   'expense.invited': 'Convidado',
   'expense.addPerson': '+ Adicionar pessoa',
   'expense.inviteAll': 'Convidar todos',
+  'expense.treatPart': 'Convidas {v}',
+  'expense.allTreated': 'É um convite: ninguém te deve nada.',
   'expense.splitEqual': 'Partes iguais',
   'expense.splitManual': 'Valores à mão',
   'expense.splitWithMe': 'Contar comigo na divisão',

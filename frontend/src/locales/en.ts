@@ -414,6 +414,8 @@ const en: Record<TKey, string> = {
   'expense.invited': 'Treated',
   'expense.addPerson': '+ Add person',
   'expense.inviteAll': 'Treat everyone',
+  'expense.treatPart': 'Your treat: {v}',
+  'expense.allTreated': 'This is a treat: nobody owes you anything.',
   'expense.splitEqual': 'Split equally',
   'expense.splitManual': 'Custom amounts',
   'expense.splitWithMe': 'Include me in the split',

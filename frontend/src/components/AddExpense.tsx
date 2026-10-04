@@ -133,6 +133,8 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
   const ajenoEf = personas.length ? debtSum : ajeno;
   const meCorresponde = round2(Math.max(0, total - Math.min(ajenoEf, total)));
   const over = round2(debtSum + invSum - total);
+  const peopleMode = showShared && rows.length > 0;
+  const allTreated = peopleMode && rows.every(x => x.r === 'inv');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +147,7 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const per = personas.filter(x => x.n.trim());
+    const per = showShared ? personas.filter(x => x.n.trim()) : [];
     const debtors = per.filter(x => x.r === 'deb');
     const allInv = per.length > 0 && per.every(x => x.r === 'inv');
     const repay = repaySummary(per);
@@ -153,9 +155,10 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
       date, desc: desc.trim(), amount: round2(amt), proposito, metodo,
       motivo: motivo.trim(), tipo: tipo.trim(),
       ajeno: showShared ? Math.min(ajenoEf, round2(amt)) : 0,
-      invitacion: allInv ? 1 : (invitacion ? 1 : 0),
+      // Con personas, la invitación sale de sus papeles (todas invitadas); sin ellas, de la casilla
+      invitacion: (per.length ? allInv : !!invitacion) ? 1 : 0,
       deudores: showShared ? (per.length ? debtors.map(x => x.n.trim()).join(', ') : deudores.trim()) : '',
-      personas: per.length ? serializePersonas(per) : (editExpense?.personas || ''),
+      personas: per.length ? serializePersonas(per) : '',
       deudaMetodo: showShared ? repay.deudaMetodo : 'Bizum',
       devuelto: showShared ? repay.devuelto : 'no',
       meCorresponde: showShared ? round2(Math.max(0, amt - (per.length ? debtSum : ajeno))) : round2(amt),
@@ -176,7 +179,8 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
     // Un nombre sugerido rellena la primera fila vacía antes de crear otra
     const empty = n ? rows.find(x => !x.n.trim()) : undefined;
     if (empty) return upP(empty.id, { n });
-    const row = toRow({ n, r: 'deb', repaid: false, method: 'Bizum' });
+    // Con la casilla de invitación marcada, las personas entran como invitadas
+    const row = toRow({ n, r: invitacion ? 'inv' : 'deb', repaid: false, method: 'Bizum' });
     if (!n) setFocusId(row.id);
     setRows(rs => [...rs, row]);
   };
@@ -275,12 +279,15 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
                   {REF.metodos.map(m => <option key={m} value={m}>{refLabel('methods', m, t)}</option>)}
                 </select>
               </div>
-              <div className="form-group">
-                <label className="invit-check" style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                  <input type="checkbox" checked={!!invitacion} onChange={e => setInvitacion(e.target.checked ? 1 : 0)} />
-                  {t('expense.invitationFull')}
-                </label>
-              </div>
+              {/* Con personas apuntadas la invitación se decide persona a persona, abajo */}
+              {!peopleMode && (
+                <div className="form-group">
+                  <label className="invit-check" style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                    <input type="checkbox" checked={!!invitacion} onChange={e => setInvitacion(e.target.checked ? 1 : 0)} />
+                    {t('expense.invitationFull')}
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -398,6 +405,7 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
                     </>
                   )}
                   <div className="mine"><span>{t('expense.yourPart')}</span><span>{eur(meCorresponde)}</span></div>
+                  {allTreated && <p className="split-note">{t('expense.allTreated')}</p>}
                   {rows.length > 0 && over > 0 && <p className="field-error">{fill(t('expense.overTotal'), { v: eur(over) })}</p>}
                 </div>
                 {errors.people && <p className="field-error">{errors.people}</p>}

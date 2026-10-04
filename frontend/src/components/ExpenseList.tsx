@@ -5,7 +5,7 @@ import type { Expense } from '../types';
 import { loadData } from '../store';
 import { apiSendToCC, apiUploadExpensePhoto, apiDeleteExpensePhoto, fetchExpensePhotoUrl } from '../api';
 import { useLocale, localizeError, LOCALE_TAG, fill, refLabel } from '../i18n';
-import { personasOf } from '../personas';
+import { isInvitation, personasOf } from '../personas';
 import { catColor } from '../categoryColors';
 import { IconSearch, IconEdit, IconFilter, IconArrowUpRight, IconChevronRight, IconX } from './Icons';
 import { eurFmt } from '../format';
@@ -187,7 +187,12 @@ export default function ExpenseList({ expenses, onEdit, onDelete, compact = fals
   };
   const hasPeople = (e: Expense) => personasOf(e).some(p => p.n.trim());
   const projectName = (id: string) => projects.find(p => p.id === id)?.name || '';
-  const noteOf = (e: Expense) => [e.motivo, e.proyectoId && projectName(e.proyectoId), e.invitacion ? t('expense.invitation') : ''].filter(Boolean).join(' · ');
+  // Invitación a medias: hay quien debe su parte y a quien se invita
+  const treatNote = (e: Expense) => {
+    const inv = personasOf(e).reduce((s, p) => s + (p.r === 'inv' && p.n.trim() ? Number(p.m) || 0 : 0), 0);
+    return inv > 0 ? fill(t('expense.treatPart'), { v: eur(inv) }) : '';
+  };
+  const noteOf = (e: Expense) => [e.motivo, e.proyectoId && projectName(e.proyectoId), isInvitation(e) ? t('expense.invitation') : treatNote(e)].filter(Boolean).join(' · ');
 
   const moreMenu = (e: Expense) => menuId === e.id && (
     <div className="xg-menu" role="menu" onClick={ev => ev.stopPropagation()}>

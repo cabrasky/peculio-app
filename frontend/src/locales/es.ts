@@ -428,6 +428,8 @@ const es = {
   'expense.invited': 'Invitado',
   'expense.addPerson': '+ Añadir persona',
   'expense.inviteAll': 'Invitar a todos',
+  'expense.treatPart': 'Invitas {v}',
+  'expense.allTreated': 'Es una invitación: nadie te debe nada.',
   'expense.splitEqual': 'A partes iguales',
   'expense.splitManual': 'Importes a mano',
   'expense.splitWithMe': 'Contarme en el reparto',
