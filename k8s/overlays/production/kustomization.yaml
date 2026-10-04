@@ -6,6 +6,16 @@ resources:
 
 namespace: peculio
 
+# Imágenes fijadas a un tag concreto (NO :latest) para despliegues reproducibles.
+# Argo CD Image Updater reescribe estos newTag cuando el CI publica una versión nueva.
+images:
+  - name: peculio-backend
+    newName: registry.cabrasky.net/peculio-backend
+    newTag: 0.1.0-d703d30
+  - name: peculio-frontend
+    newName: registry.cabrasky.net/peculio-frontend
+    newTag: 0.1.0-d703d30
+
 commonLabels:
   environment: production
 
