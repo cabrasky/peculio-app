@@ -1,0 +1,26 @@
+// ============================================================================
+// Jenkinsfile.cleanup — remove stale preview namespaces
+// ============================================================================
+pipeline {
+    agent any
+    triggers { cron('0 6 * * 1') }  // every Monday at 6am
+    stages {
+        stage('Cleanup Stale Previews') {
+            steps {
+                script {
+                    def TWO_WEEKS = 14
+                    def namespaces = sh(script: "kubectl get ns -o name | grep 'peculio-preview-'", returnStdout: true).trim().split('\n')
+                    namespaces.each { ns ->
+                        def nsName = ns.replace('namespace/', '')
+                        def created = sh(script: "kubectl get ns ${nsName} -o jsonpath={.metadata.creationTimestamp}", returnStdout: true).trim()
+                        def daysOld = sh(script: "echo \$(( ( \$(date +%s) - \$(date -d '${created}' +%s) ) / 86400 ))", returnStdout: true).trim()
+                        if (daysOld.toInteger() > TWO_WEEKS) {
+                            echo "Deleting stale preview: ${nsName} (${daysOld} days old)"
+                            sh "kubectl delete ns ${nsName}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

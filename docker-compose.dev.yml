@@ -1,0 +1,43 @@
+# Dev environment with hot-reload backend
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-peculio_user}
+      POSTGRES_PASSWORD: ${DB_PASS:-peculio_password}
+      POSTGRES_DB: ${DB_NAME:-peculio}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-peculio_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-peculio_user}
+      DB_PASS: ${DB_PASS:-peculio_password}
+
+      APP_URL: http://localhost:8000
+      DB_HOST
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8121}
+    ports:
+      - "8000:8000"
+    develop:
+      watch:
+        - path: ./backend
+          action: rebuild
+
+volumes:
+  pgdata:

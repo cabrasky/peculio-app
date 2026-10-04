@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: peculio
+  labels:
+    app: peculio
+    component: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: peculio
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: peculio
+        component: backend
+    spec:
+      terminationGracePeriodSeconds: 30
+      # Repositorio de APKs: la carpeta del servidor que nginx sirve en /apk.
+      # El backend la escribe (subidas desde el panel y manifest.json) como el
+      # usuario de la imagen (peculio, uid 999): el initContainer le da la propiedad.
+      initContainers:
+        - name: apk-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /data/apk/builds /data/apk/.uploads && chown -R 999:999 /data/apk"]
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: apk
+              mountPath: /data/apk
+      containers:
+        - name: backend
+          image: peculio-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: peculio-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peculio-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: peculio-secrets
+                  key: DB_NAME
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peculio-secrets
+                  key: JWT_SECRET
+            - name: APP_URL
+              value: https://peculio.cabrasky.net
+            - name: FRONTEND_URL
+              value: "https://peculio.cabrasky.net"
+            - name: APK_DIR
+              value: /data/apk
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: apk
+              mountPath: /data/apk
+      volumes:
+        - name: apk
+          hostPath:
+            path: /opt/peculio-apk
+            type: DirectoryOrCreate
