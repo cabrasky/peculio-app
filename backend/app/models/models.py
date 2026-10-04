@@ -174,6 +174,8 @@ class Project(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Presupuesto del proyecto; nulo = sin presupuesto
+    budget: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

@@ -34,6 +34,7 @@ export function expenseCost(e: Expense): number {
 export interface Project {
   id: string;
   name: string;
+  budget?: number; // presupuesto; sin él (o 0) el proyecto no tiene
   createdAt: string;
 }
 

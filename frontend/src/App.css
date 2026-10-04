@@ -1526,3 +1526,20 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   .adm-dl { grid-template-columns: 1fr; }
   .adm-danger-row { flex-direction: column; }
 }
+
+/* Semanal realista y presupuesto de proyectos */
+.stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.wk-line { margin: 0 0 12px; font-size: 14px; font-weight: 700; }
+.wk-line.positive { color: var(--success); }
+.wk-line.negative { color: var(--danger); }
+.wk-plan { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 10px; }
+.wk-plan li { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface2); font-size: 13.5px; line-height: 1.45; }
+.wk-plan li strong { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.wk-plan li .btn { justify-self: start; margin-top: 4px; }
+.wk-projects { display: grid; gap: 14px; margin-top: 10px; }
+.wk-project-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.week-item.current { outline: 2px solid var(--primary); outline-offset: -2px; }
+.budget-bar { min-width: 150px; }
+.budget-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+.budget-line .positive { color: var(--success); }
+.budget-line .negative { color: var(--danger); }

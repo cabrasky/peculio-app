@@ -7,6 +7,7 @@ import type { Project } from '../types';
 import { loadData, addProject, updateProject, deleteProject } from '../store';
 import { IconPlus, IconX, IconEdit, IconTrash, IconArrowRight } from './Icons';
 import { eur } from '../format';
+import BudgetBar from './BudgetBar';
 
 interface Props {
   onRefresh: () => void;
@@ -21,6 +22,7 @@ export default function ProjectsPage({ onRefresh, onAddToProject }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [name, setName] = useState('');
+  const [budget, setBudget] = useState('');
   const [error, setError] = useState('');
 
   const statsFor = (id: string) => {
@@ -30,21 +32,22 @@ export default function ProjectsPage({ onRefresh, onAddToProject }: Props) {
   const generalTotal = data.expenses.filter(e => !e.proyectoId).reduce((s, e) => s + expenseCost(e), 0);
 
   const openNew = () => {
-    setEditing(null); setName(''); setError(''); setShowForm(true);
+    setEditing(null); setName(''); setBudget(''); setError(''); setShowForm(true);
   };
 
   const openEdit = (e: React.MouseEvent, p: Project) => {
     e.stopPropagation();
-    setEditing(p); setName(p.name); setError(''); setShowForm(true);
+    setEditing(p); setName(p.name); setBudget(p.budget ? String(p.budget) : ''); setError(''); setShowForm(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError(t('error.nameRequired')); return; }
+    const b = Math.max(0, Number(budget.replace(',', '.')) || 0);
     if (editing) {
-      updateProject(editing.id, name.trim());
+      updateProject(editing.id, name.trim(), b);
     } else {
-      addProject(name.trim());
+      addProject(name.trim(), b);
     }
     setShowForm(false);
     onRefresh();
@@ -101,7 +104,7 @@ export default function ProjectsPage({ onRefresh, onAddToProject }: Props) {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>{t('common.name')}</th><th>{t('nav.expenses')}</th><th>{t('common.total')}</th><th></th></tr>
+                <tr><th>{t('common.name')}</th><th>{t('nav.expenses')}</th><th>{t('common.total')}</th><th>{t('proj.budget')}</th><th></th></tr>
               </thead>
               <tbody>
                 {projects.map(p => {
@@ -114,12 +117,13 @@ export default function ProjectsPage({ onRefresh, onAddToProject }: Props) {
                       </td>
                       <td>{s.count}</td>
                       <td className="td-amount">{eur(s.total)}</td>
+                      <td>{p.budget ? <BudgetBar spent={s.total} budget={p.budget} compact /> : <span className="td-muted">{t('proj.noBudget')}</span>}</td>
                       <td style={{ textAlign: 'right' }}>
                         <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
                           <button className="btn sm primary" onClick={e => handleAddExpense(e, p)} title={t('proj.addExpenseTitle')}>
                             <IconPlus size={14} /> {t('expense.addBtn')}
                           </button>
-                          <button className="btn sm outline" onClick={e => openEdit(e, p)} title={t('common.rename')}><IconEdit size={14} /></button>
+                          <button className="btn sm outline" onClick={e => openEdit(e, p)} title={t('common.edit')}><IconEdit size={14} /></button>
                           <button className="btn sm outline" onClick={() => navigate(`/projects/${p.id}`)} title={t('proj.viewBreakdown')}><IconArrowRight size={14} /></button>
                           <button className="btn sm danger" onClick={e => handleDelete(e, p)} title={t('common.delete')}><IconTrash size={14} /></button>
                         </div>
@@ -140,13 +144,21 @@ export default function ProjectsPage({ onRefresh, onAddToProject }: Props) {
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editing ? t('proj.rename') : t('proj.new')}</h2>
+              <h2>{editing ? t('proj.editTitle') : t('proj.new')}</h2>
               <button className="modal-close" onClick={() => setShowForm(false)} type="button" aria-label={t('common.close')}><IconX size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-group">
                 <label>{t('common.name')}</label>
                 <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t('proj.namePh')} autoFocus />
+              </div>
+              <div className="form-group">
+                <label>{t('proj.budgetOptional')}</label>
+                <div className="amount-input-wrap">
+                  <span className="cur">€</span>
+                  <input type="number" step="0.01" min="0" value={budget} onChange={e => setBudget(e.target.value)} placeholder="0,00" />
+                </div>
+                <span className="form-hint">{t('proj.budgetHint')}</span>
               </div>
               {error && <p style={{ color: 'var(--danger)', fontSize: '.85rem' }}>{error}</p>}
               <div className="form-actions">

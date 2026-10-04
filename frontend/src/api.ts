@@ -279,6 +279,7 @@ export interface ServerProject {
   id: string;
   user_id: string;
   name: string;
+  budget?: number | null;
   created_at: string;
 }
 

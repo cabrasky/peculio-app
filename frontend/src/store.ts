@@ -521,17 +521,17 @@ function syncDeletedSubscription(id: string) {
 /* ===== PROJECTS ===== */
 
 function toServerProject(p: Project): ProjectCreateBody {
-  return { name: p.name };
+  return { name: p.name, budget: p.budget || null };
 }
 
 function fromServerProject(s: ServerProject): Project {
-  return { id: s.id, name: s.name, createdAt: s.created_at };
+  return { id: s.id, name: s.name, budget: s.budget || undefined, createdAt: s.created_at };
 }
 
-export function addProject(name: string): Project | null {
+export function addProject(name: string, budget?: number): Project | null {
   if (blockedInDemo()) return null;
   const data = loadData();
-  const project: Project = { id: genId(), name, createdAt: new Date().toISOString() };
+  const project: Project = { id: genId(), name, budget: budget || undefined, createdAt: new Date().toISOString() };
   data.projects.push(project);
   saveData(data);
   apiCreateProject(toServerProject(project))
@@ -542,19 +542,20 @@ export function addProject(name: string): Project | null {
   return project;
 }
 
-export function updateProject(id: string, name: string) {
+export function updateProject(id: string, name: string, budget?: number) {
   if (blockedInDemo()) return;
   const data = loadData();
   const p = data.projects.find(x => x.id === id);
   if (!p) return;
   p.name = name;
+  p.budget = budget || undefined;
   saveData(data);
   if (isServerId(id)) {
-    apiUpdateProject(id, { name }).catch(err => {
+    apiUpdateProject(id, { name, budget: budget || null }).catch(err => {
       if (!String(err?.message || '').includes('not found')) syncError('sync.updProject');
     });
   } else {
-    addProject(name); // id temporal: reintentar como alta
+    addProject(name, budget); // id temporal: reintentar como alta
     data.projects = data.projects.filter(x => x.id !== id);
     saveData(data);
   }

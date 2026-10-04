@@ -348,10 +348,13 @@ class SubscriptionOut(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str
+    budget: Optional[float] = Field(default=None, ge=0)
 
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
+    # Enviar null (o 0) quita el presupuesto; no enviarlo lo deja como está
+    budget: Optional[float] = Field(default=None, ge=0)
 
 
 class CategoryBase(BaseModel):
@@ -383,6 +386,7 @@ class ProjectOut(BaseModel):
     id: str
     user_id: str
     name: str
+    budget: Optional[float] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

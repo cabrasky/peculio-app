@@ -12,6 +12,11 @@ from app.routers.crud import list_entities, get_entity, create_entity, update_en
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+def _budget(value: float | None) -> float | None:
+    """Presupuesto a guardar: nulo si no hay (0 también cuenta como «sin presupuesto»)."""
+    return round(value, 2) if value and value > 0 else None
+
+
 @router.get("", response_model=list[ProjectOut])
 async def list_projects(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await list_entities(db, Project, user.id, order_by=Project.name.asc())
@@ -30,7 +35,7 @@ async def create_project(body: ProjectCreate, user=Depends(get_current_user), db
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
-    return await create_entity(db, Project, user.id, {"name": name})
+    return await create_entity(db, Project, user.id, {"name": name, "budget": _budget(body.budget)})
 
 
 @router.put("/{project_id}", response_model=ProjectOut)
@@ -44,6 +49,10 @@ async def update_project(project_id: str, body: ProjectUpdate, user=Depends(get_
     p = await update_entity(db, Project, project_id, user.id, data)
     if not p:
         raise HTTPException(status_code=404)
+    if "budget" in body.model_fields_set:
+        # update_entity ignora los None, y aquí None significa «quitar el presupuesto»
+        p.budget = _budget(body.budget)
+        await db.flush()
     return p
 
 

@@ -5,6 +5,7 @@ import { loadData, deleteExpense, updateExpense } from '../store';
 import { useLocale, fill, refLabel } from '../i18n';
 import { IconArrowLeft, IconPlus, IconTrash } from './Icons';
 import { eur } from '../format';
+import BudgetBar from './BudgetBar';
 
 interface Props {
   onRefresh: () => void;
@@ -70,6 +71,14 @@ export default function ProjectDetail({ onRefresh, onEditExpense, onAddToProject
           <IconPlus size={16} /> {t('expense.addBtn')}
         </button>
       </div>
+
+      {project.budget ? (
+        <div className="card">
+          <h3>{t('proj.budget')}</h3>
+          <BudgetBar spent={total} budget={project.budget} />
+          <p className="form-hint" style={{ marginTop: 8 }}>{t('proj.budgetHint')}</p>
+        </div>
+      ) : null}
 
       <div className="card">
         <div className="card-header">
