@@ -11,9 +11,9 @@ namespace: peculio
 # aquí solo fijamos el newTag. Argo CD Image Updater reescribe este tag al publicar.
 images:
   - name: registry.cabrasky.net/peculio-backend
-    newTag: 0.1.0-17cec89
+    newTag: 0.1.0-4f1535a
   - name: registry.cabrasky.net/peculio-frontend
-    newTag: 0.1.0-17cec89
+    newTag: 0.1.0-4f1535a
 
 commonLabels:
   environment: production
