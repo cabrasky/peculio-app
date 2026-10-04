@@ -14,6 +14,7 @@ interface User {
   locale?: AccountPreferences['locale'];
   theme?: AccountPreferences['theme'];
   weekly_goal?: number | null;
+  weekly_excluded?: string[] | null;
   setup_done?: boolean;
   mobile_tour_done?: boolean;
   is_demo?: boolean;

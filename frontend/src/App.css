@@ -1536,6 +1536,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 .wk-plan li { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface2); font-size: 13.5px; line-height: 1.45; }
 .wk-plan li strong { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 .wk-plan li .btn { justify-self: start; margin-top: 4px; }
+.wk-cats { display: flex; flex-wrap: wrap; gap: 8px; }
 .wk-projects { display: grid; gap: 14px; margin-top: 10px; }
 .wk-project-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
 .week-item.current { outline: 2px solid var(--primary); outline-offset: -2px; }

@@ -35,6 +35,7 @@ class UserOut(BaseModel):
     locale: str = ""
     theme: str = "system"
     weekly_goal: Optional[float] = None
+    weekly_excluded: Optional[list[str]] = None
     setup_done: bool = False
     mobile_tour_done: bool = False
     is_demo: bool = False
@@ -47,6 +48,8 @@ class PreferencesUpdate(BaseModel):
     locale: Optional[Literal["es", "en", "pt"]] = None
     theme: Optional[Literal["system", "light", "dark"]] = None
     weekly_goal: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    # Lista completa de categorías apartadas del objetivo semanal ([] = ninguna)
+    weekly_excluded: Optional[list[str]] = Field(default=None, max_length=64)
     setup_done: Optional[bool] = None
     mobile_tour_done: Optional[bool] = None
 

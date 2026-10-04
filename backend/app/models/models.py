@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Float, Date, DateTime, Boolean, Integer, Text, LargeBinary, ForeignKey, Enum as SAEnum, false
+from sqlalchemy import String, Float, Date, DateTime, Boolean, Integer, Text, LargeBinary, ForeignKey, Enum as SAEnum, JSON, false
 from sqlalchemy.orm import Mapped, mapped_column
 from app.config import settings
 from app.database import Base
@@ -40,6 +40,8 @@ class User(Base):
     locale: Mapped[str] = mapped_column(String(8), default="", server_default="")  # "" = aún sin elegir
     theme: Mapped[str] = mapped_column(String(10), default="system", server_default="system")
     weekly_goal: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=None)
+    # Categorías que no cuentan contra el objetivo semanal; None = aún sin elegir (las apps apartan el ahorro)
+    weekly_excluded: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     setup_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     mobile_tour_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Suspensión por un admin (None = activa): no puede entrar ni usar la API

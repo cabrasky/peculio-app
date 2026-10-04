@@ -75,7 +75,7 @@ function MonthlyCharts({ expenses, incomes }: { expenses: any[]; incomes: any[] 
 function AppContent() {
   const { user, loading } = useAuth();
   const [layout, setLayout] = useState<'desktop' | 'mobile'>(autoLayout);
-  const { weeklyGoal, setPrefs } = usePreferences();
+  const { weeklyGoal, weeklyExcluded, setPrefs } = usePreferences();
   const [setupLater, setSetupLater] = useState(false);
   const [data, setData] = useState(() => loadData());
   const [editId, setEditId] = useState<string | null>(null);
@@ -167,7 +167,8 @@ function AppContent() {
         <MonthlyCharts expenses={data.expenses} incomes={data.incomes} />
       } />
       <Route path="/more/weekly" element={
-        <WeeklyBudget expenses={data.expenses} weeklyGoal={weeklyGoal} onGoalChange={v => setPrefs({ weeklyGoal: v })} />
+        <WeeklyBudget expenses={data.expenses} weeklyGoal={weeklyGoal} onGoalChange={v => setPrefs({ weeklyGoal: v })}
+          excluded={weeklyExcluded} onExcludedChange={v => setPrefs({ weeklyExcluded: v })} />
       } />
       <Route path="/pending" element={
         <PendingPayments expenses={data.expenses} onRefresh={refresh} />

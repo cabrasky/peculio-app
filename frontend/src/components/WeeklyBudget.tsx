@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { expenseCost } from '../types';
+import { expenseCost, REF } from '../types';
 import type { Expense } from '../types';
 import { loadData } from '../store';
-import { weeklyPlan } from '../weekly';
+import { excludedOf, weeklyPlan } from '../weekly';
 import { WeeklyProgressChart } from './Charts';
 import BudgetBar from './BudgetBar';
-import { useLocale, fill } from '../i18n';
+import { useLocale, fill, refLabel } from '../i18n';
 import { eur } from '../format';
 import { IconCalendar } from './Icons';
 
@@ -13,6 +13,8 @@ interface Props {
   expenses: Expense[];
   weeklyGoal: number;
   onGoalChange: (v: number) => void;
+  excluded: string[] | null; // categorías apartadas del objetivo; null = aún sin elegir
+  onExcludedChange: (v: string[]) => void;
 }
 
 type Mode = 'real' | 'all';
@@ -23,7 +25,7 @@ function loadMode(): Mode {
   try { return localStorage.getItem(MODE_KEY) === 'all' ? 'all' : 'real'; } catch { return 'real'; }
 }
 
-export default function WeeklyBudget({ expenses, weeklyGoal, onGoalChange }: Props) {
+export default function WeeklyBudget({ expenses, weeklyGoal, onGoalChange, excluded, onExcludedChange }: Props) {
   const { t } = useLocale();
   const [mode, setModeState] = useState<Mode>(loadMode);
   const setMode = (m: Mode) => {
@@ -32,10 +34,14 @@ export default function WeeklyBudget({ expenses, weeklyGoal, onGoalChange }: Pro
   };
   const real = mode === 'real';
   const projects = loadData().projects;
+  const apart = excludedOf(excluded);
+  // Las de la lista y, por si alguna guardada ya no existe, también esas
+  const categories = [...new Set([...REF.propositos, ...apart])];
+  const toggleApart = (c: string) => onExcludedChange(apart.includes(c) ? apart.filter(x => x !== c) : [...apart, c]);
   const plan = useMemo(
-    () => weeklyPlan(expenses, projects, weeklyGoal, new Date(), real, expenseCost),
+    () => weeklyPlan(expenses, projects, weeklyGoal, new Date(), real, expenseCost, apart),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expenses, weeklyGoal, real, projects.map(p => `${p.id}:${p.budget || 0}`).join()],
+    [expenses, weeklyGoal, real, projects.map(p => `${p.id}:${p.budget || 0}`).join(), apart.join('|')],
   );
   const { weeks, totalSpent, annualGoal: totalGoal, thisWeek } = plan;
   const onTrack = totalSpent <= totalGoal;
@@ -104,6 +110,23 @@ export default function WeeklyBudget({ expenses, weeklyGoal, onGoalChange }: Pro
               )}
             </ul>
             <p className="form-hint">{t('weekly.realHint')}</p>
+          </div>
+
+          <div className="card">
+            <h3>{t('weekly.excludedTitle')}</h3>
+            <p className="form-hint" style={{ margin: '4px 0 10px' }}>{t('weekly.excludedHint')}</p>
+            <div className="wk-cats">
+              {categories.map(c => {
+                const on = apart.includes(c);
+                const spent = plan.excludedCats.find(x => x.name === c)?.spent || 0;
+                return (
+                  <button key={c} type="button" className={`split-chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => toggleApart(c)}>
+                    {refLabel('categories', c, t)}{on && spent > 0 ? ` · ${eur(spent)}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+            {plan.excludedByCats > 0 && <p className="form-hint" style={{ marginTop: 10 }}>{fill(t('weekly.excludedNote'), { v: eur(plan.excludedByCats) })}</p>}
           </div>
 
           {plan.projects.length > 0 && (

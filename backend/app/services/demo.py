@@ -108,6 +108,7 @@ async def reset_demo_data(db: AsyncSession, user: User) -> None:
     user.locale = ""
     user.theme = ""
     user.weekly_goal = None
+    user.weekly_excluded = None
     user.setup_done = True          # entra directo al panel
     user.mobile_tour_done = False   # el móvil enseña el tutorial una vez (marca local)
 

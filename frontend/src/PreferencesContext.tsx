@@ -10,7 +10,8 @@ import {
   type Locale, type ThemePref,
 } from './preferences';
 
-export interface Prefs { locale: Locale; theme: ThemePref; weeklyGoal: number }
+// weeklyExcluded: categorías apartadas del objetivo semanal; null = aún sin elegir
+export interface Prefs { locale: Locale; theme: ThemePref; weeklyGoal: number; weeklyExcluded: string[] | null }
 
 interface PrefsValue extends Prefs {
   /** Cambia preferencias; con `sync` (por defecto) también se guardan en la cuenta. */
@@ -24,6 +25,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { locale, setLocale } = useLocale();
   const [theme, setTheme] = useState<ThemePref>(loadTheme);
   const [weeklyGoal, setWeeklyGoal] = useState<number>(loadWeeklyGoal);
+  const [weeklyExcluded, setWeeklyExcluded] = useState<string[] | null>(null);
 
   useEffect(() => applyTheme(theme), [theme]);
 
@@ -31,12 +33,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const applied = useRef('');
   useEffect(() => {
     if (!user?.setup_done) return;
-    const sig = `${user.id}|${user.locale}|${user.theme}|${user.weekly_goal}`;
+    const sig = `${user.id}|${user.locale}|${user.theme}|${user.weekly_goal}|${JSON.stringify(user.weekly_excluded ?? null)}`;
     if (applied.current === sig) return;
     applied.current = sig;
     if (user.locale) setLocale(user.locale);
     if (user.theme) { setTheme(user.theme); saveTheme(user.theme); }
     if (user.weekly_goal && user.weekly_goal > 0) { setWeeklyGoal(user.weekly_goal); saveWeeklyGoal(user.weekly_goal); }
+    setWeeklyExcluded(user.weekly_excluded ?? null);
   }, [user, setLocale]);
 
   // Navegador → cuenta: agrupa cambios seguidos (p. ej. al teclear el presupuesto)
@@ -60,11 +63,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       setWeeklyGoal(p.weeklyGoal);
       if (p.weeklyGoal > 0) { saveWeeklyGoal(p.weeklyGoal); body.weekly_goal = p.weeklyGoal; }
     }
+    if (p.weeklyExcluded) { setWeeklyExcluded(p.weeklyExcluded); body.weekly_excluded = p.weeklyExcluded; }
     if ((opts?.sync ?? true) && user && Object.keys(body).length) pushToAccount(body);
   }, [setLocale, user, pushToAccount]);
 
   return (
-    <PrefsContext.Provider value={{ locale, theme, weeklyGoal, setPrefs }}>
+    <PrefsContext.Provider value={{ locale, theme, weeklyGoal, weeklyExcluded, setPrefs }}>
       {children}
     </PrefsContext.Provider>
   );

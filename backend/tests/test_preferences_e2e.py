@@ -75,6 +75,16 @@ async def main():
             check(f"rechaza {bad}", r.status_code == 422, f"got {r.status_code}")
 
         # 7. sin sesión
+        # categorías apartadas del objetivo semanal: sin elegir es null; se guarda la lista entera, también vacía
+        check("weekly_excluded nulo por defecto", user.get("weekly_excluded") is None)
+        r = c.put("/api/auth/me/preferences", headers=H, json={"weekly_excluded": ["Ahorro/Inversion", "Viajes"]})
+        check("guardar categorías apartadas", r.status_code == 200 and r.json().get("weekly_excluded") == ["Ahorro/Inversion", "Viajes"], r.text[:160])
+        r = c.put("/api/auth/me/preferences", headers=H, json={"theme": "dark"})
+        check("otro cambio no las toca", r.json().get("weekly_excluded") == ["Ahorro/Inversion", "Viajes"])
+        r = c.put("/api/auth/me/preferences", headers=H, json={"weekly_excluded": []})
+        check("lista vacía = ninguna apartada", r.status_code == 200 and r.json().get("weekly_excluded") == [], r.text[:160])
+        check("GET /me la devuelve", c.get("/api/auth/me", headers=H).json().get("weekly_excluded") == [])
+
         r = c.put("/api/auth/me/preferences", json={"theme": "light"})
         check("sin token 401", r.status_code == 401, f"got {r.status_code}")
 

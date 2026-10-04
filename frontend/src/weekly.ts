@@ -2,11 +2,12 @@
 // se puede gastar de aquí a fin de año, cómo se acabará al ritmo actual y qué objetivo
 // sería alcanzable. Sin dependencias de la interfaz; el mismo fichero en la web y en la app.
 
-export interface WeeklyExpense { date: string; proyectoId?: string }
+export interface WeeklyExpense { date: string; proyectoId?: string; proposito?: string }
 export interface WeeklyProject { id: string; name: string; budget?: number | null }
 
 export interface WeekRow { num: number; spent: number; accSpent: number; accGoal: number; avail: number }
 export interface ProjectBudget { id: string; name: string; budget: number; spent: number; left: number; pct: number }
+export interface ExcludedCategory { name: string; spent: number }
 
 export interface WeeklyPlan {
   year: number;
@@ -28,9 +29,15 @@ export interface WeeklyPlan {
   suggestedGoal: number | null;
   projects: ProjectBudget[]; // proyectos con presupuesto
   excluded: number;          // gasto del año en esos proyectos que no cuenta en el objetivo
+  excludedCats: ExcludedCategory[]; // categorías apartadas del objetivo, con lo gastado este año
+  excludedByCats: number;    // suma de lo anterior
 }
 
 export const WEEKS_IN_YEAR = 52;
+// Categorías que no cuentan contra el objetivo mientras el usuario no elija otras:
+// lo que se ahorra o se invierte no es gasto del día a día
+export const DEFAULT_EXCLUDED = ['Ahorro/Inversion'];
+export const excludedOf = (saved?: string[] | null): string[] => saved ?? DEFAULT_EXCLUDED;
 const PACE_WEEKS = 8;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -50,12 +57,13 @@ export const weekOfYear = (date: string | Date) => isoWeek(date).week;
 
 /**
  * `realistic`: los gastos de un proyecto con presupuesto se controlan en su proyecto y no
- * cuentan contra el objetivo semanal. Sin él cuenta todo.
+ * cuentan contra el objetivo semanal, y tampoco los de las categorías de `excluded`
+ * (ahorro, inversión…). Sin él cuenta todo.
  * `costOf`: lo que le cuesta el gasto al usuario (su parte en los compartidos).
  */
 export function weeklyPlan<E extends WeeklyExpense>(
   expenses: E[], projects: WeeklyProject[], weeklyGoal: number, today: string | Date,
-  realistic: boolean, costOf: (e: E) => number,
+  realistic: boolean, costOf: (e: E) => number, excluded: string[] = [],
 ): WeeklyPlan {
   const goal = Math.max(0, Number(weeklyGoal) || 0);
   const now = isoWeek(today);
@@ -64,7 +72,8 @@ export function weeklyPlan<E extends WeeklyExpense>(
 
   const byWeek = new Array<number>(WEEKS_IN_YEAR + 1).fill(0);
   const byProject = new Map<string, number>();
-  let excluded = 0;
+  const apart = new Map(excluded.map(c => [c, 0]));
+  let inProjects = 0;
   for (const e of expenses) {
     if (!e.date) continue;
     const cost = Number(costOf(e)) || 0;
@@ -73,7 +82,8 @@ export function weeklyPlan<E extends WeeklyExpense>(
     if (inBudget) byProject.set(e.proyectoId!, (byProject.get(e.proyectoId!) || 0) + cost);
     const w = isoWeek(e.date);
     if (w.year !== now.year) continue;
-    if (realistic && inBudget) { excluded += cost; continue; }
+    if (realistic && inBudget) { inProjects += cost; continue; }
+    if (realistic && e.proposito && apart.has(e.proposito)) { apart.set(e.proposito, apart.get(e.proposito)! + cost); continue; }
     byWeek[Math.min(w.week, WEEKS_IN_YEAR)] += cost; // la semana 53, si la hay, va con la 52
   }
 
@@ -116,6 +126,8 @@ export function weeklyPlan<E extends WeeklyExpense>(
     spentSoFar: r2(spentBefore + spentThis),
     thisWeek: { spent: spentThis, left: r2(adjustedGoal - spentThis), pct: adjustedGoal > 0 ? Math.round((spentThis / adjustedGoal) * 100) : (spentThis > 0 ? 100 : 0) },
     adjustedGoal, pace, paceWeeks, projection, projectionDiff: r2(periodGoal - projection), suggestedGoal,
-    projects: projectRows, excluded: r2(excluded),
+    projects: projectRows, excluded: r2(inProjects),
+    excludedCats: realistic ? [...apart].map(([name, spent]) => ({ name, spent: r2(spent) })) : [],
+    excludedByCats: realistic ? r2([...apart.values()].reduce((s, v) => s + v, 0)) : 0,
   };
 }

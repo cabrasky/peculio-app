@@ -69,6 +69,7 @@ export interface AccountPreferences {
   locale: '' | 'es' | 'en' | 'pt';   // '' = aún sin elegir
   theme: '' | 'system' | 'light' | 'dark';
   weekly_goal: number | null;
+  weekly_excluded: string[] | null; // null = aún sin elegir
   setup_done: boolean;
   mobile_tour_done: boolean;
 }
