@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.models import Income
 from app.schemas.schemas import IncomeCreate, IncomeUpdate, IncomeOut
 from app.routers.auth import get_user_from_bearer as get_current_user
-from app.routers.crud import get_entity, create_entity, update_entity, delete_entity
+from app.routers.crud import get_entity, create_idempotent, update_entity, delete_entity
 
 router = APIRouter(prefix="/incomes", tags=["incomes"])
 
@@ -38,7 +38,11 @@ async def get_income(income_id: str, user=Depends(get_current_user), db: AsyncSe
 
 @router.post("", response_model=IncomeOut, status_code=201)
 async def create_income(body: IncomeCreate, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return await create_entity(db, Income, user.id, body.model_dump())
+    data = body.model_dump()
+    client_id = (data.pop("client_id", None) or "").strip() or None
+    data["client_id"] = client_id
+    entity, _ = await create_idempotent(db, Income, user.id, data, client_id)
+    return entity
 
 
 @router.put("/{income_id}", response_model=IncomeOut)

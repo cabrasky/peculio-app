@@ -177,6 +177,7 @@ class ExpenseCreate(BaseModel):
     date: _dt.date
     description: str
     amount: float = Field(gt=0)
+    client_id: Optional[str] = Field(default=None, max_length=64)
     purpose: str = ""
     motive: str = ""
     type: str = ""
@@ -216,6 +217,7 @@ class ExpenseUpdate(BaseModel):
 class ExpenseOut(BaseModel):
     id: str
     user_id: str
+    client_id: str | None = None
     date: _dt.date
     description: str
     amount: float
@@ -245,6 +247,7 @@ class IncomeCreate(BaseModel):
     date: _dt.date
     description: str
     amount: float = Field(gt=0)
+    client_id: Optional[str] = Field(default=None, max_length=64)
     category: str = ""
     notes: str = ""
 
@@ -260,6 +263,7 @@ class IncomeUpdate(BaseModel):
 class IncomeOut(BaseModel):
     id: str
     user_id: str
+    client_id: str | None = None
     date: _dt.date
     description: str
     amount: float

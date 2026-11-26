@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Float, Date, DateTime, Boolean, Integer, Text, LargeBinary, ForeignKey, Enum as SAEnum, JSON, false
+from sqlalchemy import String, Float, Date, DateTime, Boolean, Integer, Text, LargeBinary, ForeignKey, Enum as SAEnum, JSON, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 from app.config import settings
 from app.database import Base
@@ -80,9 +80,11 @@ class SmtpConfig(Base):
 
 class Expense(Base):
     __tablename__ = "expenses"
+    __table_args__ = (UniqueConstraint("user_id", "client_id", name="uq_expenses_user_client_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
@@ -123,9 +125,11 @@ class ExpensePhoto(Base):
 
 class Income(Base):
     __tablename__ = "incomes"
+    __table_args__ = (UniqueConstraint("user_id", "client_id", name="uq_incomes_user_client_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
