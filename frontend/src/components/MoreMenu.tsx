@@ -13,7 +13,7 @@ const ITEMS = [
 
 export default function MoreMenu() {
   const { user, logout } = useAuth();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   return (
     <div className="more-grid">
       <Link to="/settings" className="more-card" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -39,6 +39,11 @@ export default function MoreMenu() {
         </div>
         <div className="more-label">{t('nav.projects')}</div>
         <div className="more-desc">{t('more.projectsDesc')}</div>
+      </Link>
+      <Link to="/more/import" className="more-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div className="more-icon"><IconCheck size={24} /></div>
+        <div className="more-label">{t('import.title', locale === 'en' ? 'Review imports' : locale === 'pt' ? 'Rever importações' : 'Revisar importaciones')}</div>
+        <div className="more-desc">{t('import.desc', locale === 'en' ? 'Review CSV receipts before saving' : locale === 'pt' ? 'Rever recibos CSV antes de guardar' : 'Revisa recibos CSV antes de guardarlos')}</div>
       </Link>
       <Link to="/excel" className="more-card" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="more-icon">

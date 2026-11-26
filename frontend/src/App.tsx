@@ -21,6 +21,7 @@ import ProjectDetail from './components/ProjectDetail';
 import WeeklyBudget from './components/WeeklyBudget';
 import PendingPayments from './components/PendingPayments';
 import SanityCheck from './components/SanityCheck';
+import ImportReviewPage from './components/ImportReviewPage';
 import SubscriptionsPage from './components/Subscriptions';
 import DesktopLayout from './components/DesktopLayout';
 import MobileLayout from './components/MobileLayout';
@@ -209,6 +210,7 @@ function AppContent() {
       <Route path="/more/sanity" element={
         <SanityCheck expenses={data.expenses} />
       } />
+      <Route path="/more/import" element={<ImportReviewPage expenses={data.expenses} onImported={refresh} />} />
       <Route path="/admin" element={
         <AdminPanel />
       } />
