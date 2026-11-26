@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { login as apiLogin, register as apiRegister, demoLogin as apiDemoLogin, getMe, getGoogleAuthUrl, setToken, getToken, setStoredUser, getStoredUser, updatePreferences as apiUpdatePreferences, type AccountPreferences } from './api';
 import { clearLocalData } from './store';
 import { setDemoMode } from './demo';
+import { isSessionRejected, shouldClearAccountCache } from './authPolicy';
 
 interface User {
   id: string;
@@ -23,6 +24,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  connectionIssue: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   /** Cuenta demo pública de solo lectura */
@@ -50,8 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(u);
   }, []);
   const [loading, setLoading] = useState(true);
+  const [connectionIssue, setConnectionIssue] = useState(false);
   const [authError, setAuthError] = useState('');
   const clearAuthError = useCallback(() => setAuthError(''), []);
+
+  const acceptUser = useCallback((next: User) => {
+    const owner = localStorage.getItem('gastos_data_owner');
+    const previous = owner ? { id: owner } : getStoredUser();
+    if (shouldClearAccountCache(previous, next)) clearLocalData();
+    localStorage.setItem('gastos_data_owner', next.id);
+    setUser(next);
+    setStoredUser(next);
+    setConnectionIssue(false);
+  }, [setUser]);
 
   const refreshUser = useCallback(async () => {
     const token = getToken();
@@ -61,58 +74,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const user = await getMe();
-      setUser(user);
-      setStoredUser(user);
-    } catch {
-      setToken(null);
-      setStoredUser(null);
-      setUser(null);
+      const next = await getMe();
+      if (getToken() === token) acceptUser(next);
+    } catch (error) {
+      if (getToken() === token) {
+        if (isSessionRejected(error)) {
+          setToken(null);
+          setStoredUser(null);
+          setUser(null);
+          setConnectionIssue(false);
+        } else {
+          // Conectividad: conserva sesión y datos; no afirma que el servidor aceptó cambios.
+          setConnectionIssue(true);
+        }
+      }
     }
     setLoading(false);
-  }, [setUser]);
+  }, [acceptUser, setUser]);
 
   useEffect(() => {
     // Check URL for token (from Google OAuth redirect)
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get('token');
     const errorFromUrl = params.get('error');
-    if (tokenFromUrl) setToken(tokenFromUrl);
+    if (tokenFromUrl) {
+      setToken(tokenFromUrl);
+      // Nunca mostrar el usuario anterior mientras se valida una sesión OAuth nueva.
+      setUser(null);
+      setStoredUser(null);
+    }
     if (errorFromUrl) setAuthError(errorFromUrl);
     if (tokenFromUrl || errorFromUrl) {
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
     refreshUser();
-  }, [refreshUser]);
+  }, [refreshUser, setUser]);
 
   const login = async (email: string, password: string) => {
     const data = await apiLogin(email, password);
     setToken(data.token);
-    setUser(data.user);
-    setStoredUser(data.user);
+    acceptUser(data.user);
   };
 
   const register = async (email: string, password: string, name: string) => {
     const data = await apiRegister(email, password, name);
     setToken(data.token);
-    setUser(data.user);
-    setStoredUser(data.user);
+    acceptUser(data.user);
   };
 
   const loginDemo = async () => {
-    clearLocalData();
     const data = await apiDemoLogin();
+    clearLocalData();
     setToken(data.token);
-    setUser(data.user);
-    setStoredUser(data.user);
+    acceptUser(data.user);
   };
 
   const logout = () => {
     clearLocalData();
+    localStorage.removeItem('gastos_data_owner');
     setToken(null);
     setStoredUser(null);
     setUser(null);
+    setConnectionIssue(false);
   };
 
   // Guarda preferencias en la cuenta y refresca el usuario con lo que devuelve el servidor
@@ -127,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginDemo, logout, googleLogin, refreshUser, updatePreferences, authError, clearAuthError }}>
+    <AuthContext.Provider value={{ user, loading, connectionIssue, login, register, loginDemo, logout, googleLogin, refreshUser, updatePreferences, authError, clearAuthError }}>
       {children}
     </AuthContext.Provider>
   );

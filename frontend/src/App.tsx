@@ -102,7 +102,7 @@ function SyncBanner({ refresh }: { refresh: () => void }) {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, connectionIssue, refreshUser } = useAuth();
   const [layout, setLayout] = useState<'desktop' | 'mobile'>(autoLayout);
   const { weeklyGoal, weeklyExcluded, setPrefs } = usePreferences();
   const [setupLater, setSetupLater] = useState(false);
@@ -237,11 +237,19 @@ function AppContent() {
   // Primera vez en su espacio: ventana para elegir nombre, idioma, tema y presupuesto
   const setupModal = user.setup_done === false && !setupLater ? <SetupModal onLater={() => setSetupLater(true)} /> : null;
 
+  const connectionBanner = connectionIssue ? (
+    <div role="status" className="msg-line error">
+      Sin conexión con el servidor. Tu sesión no se ha cerrado; los cambios no están confirmados.
+      {' '}<button type="button" className="btn outline sm" onClick={() => void refreshUser()}>Reintentar</button>
+    </div>
+  ) : null;
+
   if (layout === 'desktop') {
     return (
       <DesktopLayout expenses={data.expenses} onAddClick={handleAddClick}>
         <DemoBanner />
         <SyncBanner refresh={refresh} />
+        {connectionBanner}
         {routes}
         <AddExpense isOpen={showAddModal} editExpense={editExpense} onClose={handleCloseAdd} onSaved={handleSave} presetProjectId={addPresetProject} />
         {setupModal}
@@ -254,6 +262,7 @@ function AppContent() {
       <MobileLayout onAddClick={handleAddClick}>
         <DemoBanner />
         <SyncBanner refresh={refresh} />
+        {connectionBanner}
         {routes}
       </MobileLayout>
       <AddExpense isOpen={showAddModal} editExpense={editExpense} onClose={handleCloseAdd} onSaved={handleSave} presetProjectId={addPresetProject} />
@@ -262,11 +271,16 @@ function AppContent() {
   );
 }
 
+function SessionApp() {
+  const { user } = useAuth();
+  return <AppContent key={user?.id ?? 'anonymous'} />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <PreferencesProvider>
-        <AppContent />
+        <SessionApp />
       </PreferencesProvider>
     </AuthProvider>
   );
