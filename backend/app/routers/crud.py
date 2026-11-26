@@ -1,6 +1,7 @@
 """Generic CRUD utilities."""
 from typing import Type, TypeVar, Optional, Any
 from sqlalchemy import select, func, delete as sa_delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ModelT = TypeVar("ModelT")
@@ -39,6 +40,41 @@ async def create_entity(
     await db.flush()
     await db.refresh(entity)
     return entity
+
+
+async def create_idempotent(
+    db: AsyncSession,
+    model: Type[ModelT],
+    user_id: str,
+    data: dict[str, Any],
+    client_id: Optional[str],
+) -> tuple[ModelT, bool]:
+    """Crea una entidad o devuelve la ya existente para la misma clave de cliente.
+
+    La restricción única (user_id, client_id) resuelve la carrera en la que dos
+    reintentos comprueban 'no existe' a la vez: el SAVEPOINT aísla el fallo y se
+    devuelve la fila ganadora sin duplicar el movimiento.
+    """
+    if not client_id:
+        return await create_entity(db, model, user_id, data), True
+
+    stmt = select(model).where(model.user_id == user_id, model.client_id == client_id)
+    existing = await db.scalar(stmt)
+    if existing is not None:
+        return existing, False
+
+    entity = model(user_id=user_id, **data)
+    try:
+        async with db.begin_nested():
+            db.add(entity)
+            await db.flush()
+    except IntegrityError:
+        existing = await db.scalar(stmt)
+        if existing is None:
+            raise
+        return existing, False
+    await db.refresh(entity)
+    return entity, True
 
 
 async def update_entity(

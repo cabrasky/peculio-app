@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.models import Expense
 from app.schemas.schemas import ExpenseCreate, ExpenseUpdate, ExpenseOut
 from app.routers.auth import get_user_from_bearer as get_current_user
-from app.routers.crud import list_entities, get_entity, create_entity, update_entity, delete_entity
+from app.routers.crud import list_entities, get_entity, create_entity, create_idempotent, update_entity, delete_entity
 from app.services.photos import store_photo, get_photo_response, delete_photo
 from app.services.recurring import ensure_recurring_expenses
 
@@ -21,6 +21,7 @@ def _to_api(expense: Expense) -> dict:
     return {
         "id": expense.id,
         "user_id": expense.user_id,
+        "client_id": expense.client_id,
         "date": expense.date,
         "description": expense.description,
         "amount": expense.amount,
@@ -120,9 +121,13 @@ async def get_expense(expense_id: str, user=Depends(get_current_user), db: Async
 
 @router.post("", response_model=ExpenseOut, status_code=201)
 async def create_expense(body: ExpenseCreate, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    user_id = user.id
     data = body.model_dump()
+    client_id = (data.pop("client_id", None) or "").strip() or None
+    data["client_id"] = client_id
     data["personal_share"] = _calculated_my_share(data)
-    return _to_api(await create_entity(db, Expense, user.id, data))
+    entity, _ = await create_idempotent(db, Expense, user_id, data, client_id)
+    return _to_api(entity)
 
 
 @router.put("/{expense_id}", response_model=ExpenseOut)

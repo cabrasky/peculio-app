@@ -202,6 +202,7 @@ export async function testSmtpConfig(config: SmtpConfigInput & { send?: boolean;
 export interface ServerExpense {
   id: string;
   user_id: string;
+  client_id?: string | null;
   date: string;            // YYYY-MM-DD
   description: string;
   amount: number;
@@ -304,6 +305,7 @@ export async function apiDeleteProject(id: string): Promise<void> {
 export interface ServerIncome {
   id: string;
   user_id: string;
+  client_id?: string | null;
   date: string;
   description: string;
   amount: number;

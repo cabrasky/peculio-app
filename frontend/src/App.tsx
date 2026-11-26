@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
-import { loadData, deleteExpense, loadAllFromServer } from './store';
+import { loadData, deleteExpense, loadAllFromServer, getSyncStatus, retryPending, resumeSync } from './store';
 import { tNow } from './i18n';
 import AddExpense from './components/AddExpense';
 import SettingsPage from './components/SettingsPage';
@@ -72,6 +72,33 @@ function MonthlyCharts({ expenses, incomes }: { expenses: any[]; incomes: any[] 
   );
 }
 
+function SyncBanner({ refresh }: { refresh: () => void }) {
+  const [status, setStatus] = useState(getSyncStatus);
+  useEffect(() => {
+    const update = () => { setStatus(getSyncStatus()); refresh(); };
+    window.addEventListener('mb:sync-status', update);
+    window.addEventListener('storage', update);
+    window.addEventListener('online', update);
+    if (navigator.onLine) void retryPending();
+    return () => {
+      window.removeEventListener('mb:sync-status', update);
+      window.removeEventListener('storage', update);
+      window.removeEventListener('online', update);
+    };
+  }, [refresh]);
+  if (!status.pending) return null;
+  return <div role="status" style={{ padding: '8px 16px', background: 'var(--surface, #fff)', borderBottom: '1px solid var(--border, #ddd)' }}>
+    {status.authRequired ? 'Inicia sesión de nuevo para sincronizar.' : status.errors
+      ? `${status.pending} cambio(s) guardados en este dispositivo; pendientes de sincronizar.`
+      : `${status.pending} cambio(s) sincronizándose…`}
+    {' '}<button type="button" onClick={async () => {
+      if (status.authRequired) resumeSync();
+      else await retryPending(true);
+      setStatus(getSyncStatus()); refresh();
+    }}>Reintentar</button>
+  </div>;
+}
+
 function AppContent() {
   const { user, loading } = useAuth();
   const [layout, setLayout] = useState<'desktop' | 'mobile'>(autoLayout);
@@ -110,7 +137,7 @@ function AppContent() {
     if (user && syncedFor !== user.id) {
       setSyncedFor(user.id);
       refresh();
-      loadAllFromServer().then(ok => { if (ok) refresh(); });
+      loadAllFromServer().then(() => { refresh(); void retryPending(); });
     }
   }, [user, syncedFor, refresh]);
 
@@ -210,6 +237,7 @@ function AppContent() {
     return (
       <DesktopLayout expenses={data.expenses} onAddClick={handleAddClick}>
         <DemoBanner />
+        <SyncBanner refresh={refresh} />
         {routes}
         <AddExpense isOpen={showAddModal} editExpense={editExpense} onClose={handleCloseAdd} onSaved={handleSave} presetProjectId={addPresetProject} />
         {setupModal}
@@ -221,6 +249,7 @@ function AppContent() {
     <>
       <MobileLayout onAddClick={handleAddClick}>
         <DemoBanner />
+        <SyncBanner refresh={refresh} />
         {routes}
       </MobileLayout>
       <AddExpense isOpen={showAddModal} editExpense={editExpense} onClose={handleCloseAdd} onSaved={handleSave} presetProjectId={addPresetProject} />

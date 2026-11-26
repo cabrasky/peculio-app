@@ -17,6 +17,12 @@ import type {
 } from './api';
 import { tNow } from './i18n';
 import { blockedInDemo } from './demo';
+import {
+  readOperations, saveOperations, deletedIds, markDeleted, clearSyncData,
+  getSyncStatus, recordSyncError, resetSyncError,
+} from './syncQueue';
+import type { SyncKind, SyncOperation } from './syncQueue';
+export { getSyncStatus } from './syncQueue';
 
 const STORAGE_KEY = 'gastos_app_data';
 
@@ -74,6 +80,7 @@ export function loadData(): AppData {
  *  (si no, al entrar en una cuenta vacía se subirían como "datos locales"). */
 export function clearLocalData() {
   localStorage.removeItem(STORAGE_KEY);
+  clearSyncData();
   catCache = { expense: [], income: [] };
 }
 
@@ -130,6 +137,112 @@ export function suggestExpense(desc: string, limit = 30): Suggestion | null {
   };
 }
 
+/* ===== Durable expense / income outbox ===== */
+const active = new Set<string>();
+const adoptedIds = new Set<string>();
+let processing: Promise<void> | null = null;
+const rowFor = (kind: SyncKind, id: string): Expense | Income | undefined =>
+  loadData()[kind].find(row => row.id === id);
+const operationKey = (op: SyncOperation) => `${op.kind}:${op.localId}:${op.action}`;
+
+function enqueueCreate(kind: SyncKind, id: string) {
+  const row = rowFor(kind, id);
+  const snapshot = row ? (kind === 'expenses' ? toServerExpense(row as Expense) : toServerIncome(row as Income)) : {};
+  const op: SyncOperation = { kind, action: 'create', localId: id, clientId: crypto.randomUUID(), snapshot: { ...snapshot }, attempts: 0, nextRetry: 0 };
+  saveOperations([...readOperations(), op]);
+  void retryPending();
+}
+function enqueueChange(kind: SyncKind, id: string, action: 'update' | 'delete') {
+  const ops = readOperations();
+  const create = ops.find(op => op.kind === kind && op.localId === id && op.action === 'create');
+  if (action === 'delete') markDeleted(id);
+  if (create && !active.has(operationKey(create))) {
+    if (action === 'delete') saveOperations(ops.filter(op => op !== create));
+    // Until a create is sent its payload is always read from the current local row.
+    return;
+  }
+  if (!create && action === 'delete' && !isServerId(id) && !adoptedIds.has(id)) return;
+  const prior = ops.find(op => op.kind === kind && op.localId === id && op.action !== 'create');
+  if (prior) {
+    if (action === 'delete') prior.action = 'delete';
+    prior.nextRetry = 0;
+  } else {
+    ops.push({ kind, action, localId: id, clientId: create?.clientId || id, attempts: 0, nextRetry: 0 });
+  }
+  saveOperations(ops);
+  void retryPending();
+}
+function bodyFor(op: SyncOperation): ExpenseCreateBody | IncomeCreateBody | undefined {
+  const row = rowFor(op.kind, op.localId);
+  if (!row) return op.action === 'create' ? { ...op.snapshot, client_id: op.clientId } as ExpenseCreateBody : undefined;
+  return op.kind === 'expenses'
+    ? { ...toServerExpense(row as Expense), client_id: op.clientId }
+    : { ...toServerIncome(row as Income), client_id: op.clientId };
+}
+function removeOperation(op: SyncOperation) {
+  saveOperations(readOperations().filter(item => !(item.kind === op.kind && item.localId === op.localId && item.action === op.action)));
+}
+async function sendOperation(op: SyncOperation) {
+  const body = bodyFor(op);
+  if (op.action === 'create') {
+    // A deletion in flight still requires the idempotent create to resolve first.
+    if (!body && !readOperations().some(x => x.kind === op.kind && x.localId === op.localId && x.action === 'delete')) {
+      removeOperation(op); return;
+    }
+    const saved = op.kind === 'expenses'
+      ? await apiCreateExpense(body as ExpenseCreateBody)
+      : await apiCreateIncome(body as IncomeCreateBody);
+    const pending = readOperations();
+    const follow = pending.find(x => x.kind === op.kind && x.localId === op.localId && x.action !== 'create');
+    if (follow) { follow.serverId = saved.id; follow.localId = saved.id; }
+    saveOperations(pending.filter(x => !(x.kind === op.kind && x.localId === op.localId && x.action === 'create')));
+    adoptedIds.add(saved.id);
+    if (rowFor(op.kind, op.localId)) adoptServerId(op.kind, op.localId, saved.id);
+    return;
+  }
+  const id = op.serverId || op.localId;
+  if (op.action === 'update' && body) {
+    if (op.kind === 'expenses') await apiUpdateExpense(id, body as ExpenseCreateBody);
+    else await apiUpdateIncome(id, body as IncomeCreateBody);
+  }
+  if (op.action === 'delete') {
+    try {
+      if (op.kind === 'expenses') await apiDeleteExpense(id);
+      else await apiDeleteIncome(id);
+    } catch (error) {
+      if (!(error instanceof Error && 'status' in error && error.status === 404)) throw error;
+    }
+    markDeleted(id);
+  }
+  removeOperation(op);
+}
+export async function retryPending(force = false): Promise<void> {
+  if (processing) return processing;
+  if (getSyncStatus().authRequired && !force) return;
+  processing = (async () => {
+    for (;;) {
+      const op = readOperations().find(item => force || item.nextRetry <= Date.now());
+      if (!op) break;
+      const key = operationKey(op);
+      if (active.has(key)) continue;
+      active.add(key);
+      try { await sendOperation(op); }
+      catch (error) {
+        const ops = readOperations();
+        const current = ops.find(x => x.kind === op.kind && x.localId === op.localId && x.action === op.action);
+        if (current) {
+          current.attempts += 1;
+          current.nextRetry = recordSyncError(error, current.attempts);
+          saveOperations(ops);
+        }
+        break;
+      } finally { active.delete(key); }
+    }
+  })();
+  try { await processing; } finally { processing = null; }
+}
+export function resumeSync(): void { resetSyncError(); void retryPending(true); }
+
 /* ===== EXPENSES ===== */
 interface ExpenseInput {
   date: string; desc: string; amount: number;
@@ -152,7 +265,7 @@ export function addExpense(input: ExpenseInput): Expense | null {
   };
   data.expenses.push(expense);
   saveData(data);
-  syncNewExpense(expense);
+  enqueueCreate('expenses', expense.id);
   return expense;
 }
 
@@ -223,33 +336,8 @@ function fromServerExpense(s: ServerExpense): Expense {
   };
 }
 
-function syncNewExpense(expense: Expense) {
-  apiCreateExpense(toServerExpense(expense))
-    .then(srv => {
-      if (srv && srv.id && srv.id !== expense.id) adoptServerId('expenses', expense.id, srv.id);
-    })
-    .catch(() => syncError('sync.addExpense'));
-}
-
-function syncUpdatedExpense(id: string) {
-  const data = loadData();
-  const e = data.expenses.find(x => x.id === id);
-  if (!e) return;
-  if (isServerId(id)) {
-    apiUpdateExpense(id, toServerExpense(e)).catch(err => {
-      if (!String(err?.message || '').includes('not found')) syncError('sync.updExpense');
-    });
-  } else {
-    syncNewExpense(e); // id temporal: la creación previa no llegó → crear ahora
-  }
-}
-
-function syncDeletedExpense(id: string) {
-  if (!isServerId(id)) return;
-  apiDeleteExpense(id).catch(err => {
-    if (!String(err?.message || '').includes('not found')) syncError('sync.delExpense');
-  });
-}
+function syncUpdatedExpense(id: string) { enqueueChange('expenses', id, 'update'); }
+function syncDeletedExpense(id: string) { enqueueChange('expenses', id, 'delete'); }
 
 /* ===== INCOMES ===== */
 interface IncomeInput {
@@ -267,7 +355,7 @@ export function addIncome(input: IncomeInput): Income | null {
   };
   data.incomes.push(income);
   saveData(data);
-  syncNewIncome(income);
+  enqueueCreate('incomes', income.id);
   return income;
 }
 
@@ -302,33 +390,8 @@ function fromServerIncome(s: ServerIncome): Income {
   };
 }
 
-function syncNewIncome(income: Income) {
-  apiCreateIncome(toServerIncome(income))
-    .then(srv => {
-      if (srv && srv.id && srv.id !== income.id) adoptServerId('incomes', income.id, srv.id);
-    })
-    .catch(() => syncError('sync.addIncome'));
-}
-
-function syncUpdatedIncome(id: string) {
-  const data = loadData();
-  const i = data.incomes.find(x => x.id === id);
-  if (!i) return;
-  if (isServerId(id)) {
-    apiUpdateIncome(id, toServerIncome(i)).catch(err => {
-      if (!String(err?.message || '').includes('not found')) syncError('sync.updIncome');
-    });
-  } else {
-    syncNewIncome(i);
-  }
-}
-
-function syncDeletedIncome(id: string) {
-  if (!isServerId(id)) return;
-  apiDeleteIncome(id).catch(err => {
-    if (!String(err?.message || '').includes('not found')) syncError('sync.delIncome');
-  });
-}
+function syncUpdatedIncome(id: string) { enqueueChange('incomes', id, 'update'); }
+function syncDeletedIncome(id: string) { enqueueChange('incomes', id, 'delete'); }
 
 /* ===== GOALS ===== */
 interface GoalInput {
@@ -595,7 +658,37 @@ function adoptServerId(kind: 'expenses' | 'incomes' | 'goals' | 'subscriptions' 
 
 type ListKind = 'expenses' | 'incomes' | 'goals' | 'subscriptions' | 'projects';
 
-async function loadKindFromServer<L, S>(
+function reconcileRows<L extends { id: string }, S extends { id: string; client_id?: string | null }>(
+  kind: 'expenses' | 'incomes', remote: S[], fromServer: (row: S) => L,
+): L[] {
+  const d = loadData();
+  const ops = readOperations().filter(op => op.kind === kind);
+  const tombstones = new Set(deletedIds());
+  const local = d[kind] as unknown as L[];
+  const server = remote.filter(row => !tombstones.has(row.id)).map(row => {
+    const created = ops.find(op => op.action === 'create' && op.clientId === row.client_id);
+    if (created) {
+      adoptedIds.add(row.id);
+      const original = local.find(item => item.id === created.localId);
+      const pending = readOperations().filter(op => op.kind !== kind || op.localId !== created.localId || op.action !== 'create');
+      const follow = pending.find(op => op.kind === kind && op.localId === created.localId);
+      if (follow) { follow.serverId = row.id; follow.localId = row.id; }
+      saveOperations(pending);
+      if (original) return { ...original, id: row.id };
+    }
+    const edited = ops.find(op => op.action === 'update' && (op.localId === row.id || op.serverId === row.id));
+    return (edited && local.find(item => item.id === edited.localId)) || fromServer(row);
+  });
+  for (const op of ops) {
+    if (op.action !== 'create') continue;
+    if (remote.some(row => row.client_id === op.clientId)) continue;
+    const item = local.find(x => x.id === op.localId);
+    if (item) server.push(item);
+  }
+  return server.filter(item => !tombstones.has(item.id) && !ops.some(op => op.action === 'delete' && (op.localId === item.id || op.serverId === item.id)));
+}
+
+async function loadKindFromServer<L extends { id: string }, S extends { id: string; client_id?: string | null }>(
   kind: ListKind,
   apiList: () => Promise<S[]>,
   apiCreate: (body: any) => Promise<S>,
@@ -607,7 +700,7 @@ async function loadKindFromServer<L, S>(
     const list = await apiList();
     const d = loadData();
     const local = d[kind] as unknown as L[];
-    if (list.length === 0 && local.length > 0) {
+    if (kind === 'incomes' && list.length === 0 && local.length > 0 && !readOperations().some(op => op.kind === 'incomes')) {
       // Migración: el servidor está vacío para esta entidad pero el navegador
       // tiene datos locales → subirlos (una vez) para no perderlos.
       const pushed: L[] = [];
@@ -624,7 +717,9 @@ async function loadKindFromServer<L, S>(
       saveData(d);
       return true;
     }
-    (d as any)[kind] = list.map(fromServer);
+    (d as any)[kind] = kind === 'incomes'
+      ? reconcileRows('incomes', list as unknown as ServerIncome[], fromServer as unknown as (row: ServerIncome) => Income)
+      : list.map(fromServer);
     saveData(d);
     return true;
   } catch (e) {
@@ -644,7 +739,7 @@ export async function loadAllFromServer(): Promise<boolean> {
   try {
     const expenses = await apiListExpenses();
     const d = loadData();
-    d.expenses = expenses.map(fromServerExpense);
+    d.expenses = reconcileRows('expenses', expenses, fromServerExpense);
     saveData(d);
   } catch (e) {
     console.warn('[sync] carga inicial de gastos desde servidor falló:', e);

@@ -252,6 +252,16 @@ async def sync_missing_columns(engine, base: type[DeclarativeBase]) -> int:
             )
             fixed += 1
 
+    # create_all only builds constraints for new tables; existing installations
+    # need the unique indexes as well as the new nullable columns. SQLite and
+    # PostgreSQL both permit multiple NULLs in a unique (user_id, client_id).
+    for table_name in ("expenses", "incomes"):
+        async with engine.begin() as conn:
+            await conn.execute(_text(
+                f'CREATE UNIQUE INDEX IF NOT EXISTS "uq_{table_name}_user_client_id" '
+                f'ON "{table_name}" ("user_id", "client_id")'
+            ))
+
     if fixed:
         logger.info("schema-sync: added %d missing column(s) in total", fixed)
     return fixed
