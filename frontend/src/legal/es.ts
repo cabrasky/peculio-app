@@ -86,10 +86,11 @@ const es: LegalDocs = {
           '**mb_weekly_goal**: el presupuesto semanal que se usa en el resumen.',
         ],
       ] },
-      { h: 'Almacenamiento local', p: [
-        'Con la sesión iniciada también se usa el almacenamiento local del navegador. No son cookies y no se envían solas al servidor:',
+      { h: 'Almacenamiento local y cookies', p: [
+        'La web usa una cookie de sesión y guarda una copia local de tus datos en el navegador:',
         [
-          '**gastos_token**: tu sesión, para que no tengas que entrar en cada visita. Dura hasta que cierres sesión.',
+          '**peculio_session**: cookie de sesión HttpOnly, Secure y SameSite; el JavaScript no puede leer tu token. Dura como máximo 24 horas y se borra al cerrar sesión.',
+          '**peculio_csrf**: cookie de seguridad legible por la web para proteger los cambios en tu cuenta. Caduca con la sesión.',
           '**gastos_user**: tu nombre y tus preferencias, para mostrarlos nada más abrir. Dura hasta que cierres sesión.',
           '**gastos_app_data**: una copia de tus datos para que la app cargue rápido. Se borra al cerrar sesión o al eliminar la cuenta.',
         ],

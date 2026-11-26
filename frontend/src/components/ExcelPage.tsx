@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { getToken } from '../api';
+import { csrfHeaders } from '../api';
 import { useLocale, localizeError, fill } from '../i18n';
 import { blockedInDemo } from '../demo';
 
@@ -11,10 +11,16 @@ export default function ExcelPage({ onImported }: { onImported?: () => void }) {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const download = (kind: 'template' | 'export') => {
-    const link = document.createElement('a');
-    link.href = `/api/excel/${kind}?token=${encodeURIComponent(getToken() || '')}`;
-    link.download = ''; document.body.appendChild(link); link.click(); link.remove();
+  const download = async (kind: 'template' | 'export') => {
+    try {
+      const res = await fetch(`/api/excel/${kind}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a');
+      link.href = url; link.download = kind === 'template' ? 'Plantilla Gastos.xlsx' : 'Mis gastos.xlsx';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) { setMsg({ err: localizeError(error, t) }); }
   };
 
   const importFile = async (file: File) => {
@@ -22,7 +28,7 @@ export default function ExcelPage({ onImported }: { onImported?: () => void }) {
     setBusy(true); setMsg({});
     try {
       const form = new FormData(); form.append('file', file);
-      const response = await fetch('/api/excel/import', { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` }, body: form });
+      const response = await fetch('/api/excel/import', { method: 'POST', credentials: 'include', headers: csrfHeaders(), body: form });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || `Error ${response.status}`);
       setMsg({ ok: data.duplicados

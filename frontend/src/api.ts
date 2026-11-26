@@ -3,15 +3,12 @@ import { tNow } from './i18n';
 
 export const BASE = import.meta.env.VITE_API_URL || '/api';
 
-/* ── Token helpers ─────────────────────────────────────────────────────────── */
+/* Browser sessions are HttpOnly; delete JWTs left by the previous web release. */
+try { localStorage.removeItem('gastos_token'); } catch { /* private browsing */ }
 
-export function getToken(): string | null {
-  return localStorage.getItem('gastos_token');
-}
-
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem('gastos_token', token);
-  else localStorage.removeItem('gastos_token');
+export function csrfHeaders(): Record<string, string> {
+  const cookie = document.cookie.split('; ').find(part => part.startsWith('peculio_csrf='));
+  return cookie ? { 'X-CSRF-Token': decodeURIComponent(cookie.slice('peculio_csrf='.length)) } : {};
 }
 
 export function getStoredUser(): any | null {
@@ -42,15 +39,14 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(method: string, path: string, body?: unknown, auth = false): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown, auth = false, webAuth = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (auth) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
+  if (webAuth) headers['X-Peculio-Web-Session'] = '1';
+  if (auth && !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) Object.assign(headers, csrfHeaders());
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
+    credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -100,11 +96,11 @@ export interface AuthResponse {
 }
 
 export async function register(email: string, password: string, name: string): Promise<AuthResponse> {
-  return request<AuthResponse>('POST', '/auth/register', { email, password, name });
+  return request<AuthResponse>('POST', '/auth/register', { email, password, name }, false, true);
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  return request<AuthResponse>('POST', '/auth/login', { email, password });
+  return request<AuthResponse>('POST', '/auth/login', { email, password }, false, true);
 }
 
 /** Elimina la cuenta y TODOS sus datos (se confirma escribiendo el propio email). */
@@ -114,7 +110,11 @@ export async function deleteAccount(confirmEmail: string): Promise<void> {
 
 /** Entra con la cuenta demo pública (solo lectura, datos de ejemplo). */
 export async function demoLogin(): Promise<AuthResponse> {
-  return request<AuthResponse>('POST', '/auth/demo');
+  return request<AuthResponse>('POST', '/auth/demo', undefined, false, true);
+}
+
+export async function logoutSession(): Promise<void> {
+  await request<void>('POST', '/auth/logout', undefined, true);
 }
 
 export async function getMe(): Promise<AuthResponse['user']> {
@@ -258,10 +258,10 @@ export async function apiDeleteExpense(id: string): Promise<void> {
 export async function apiUploadExpensePhoto(id: string, file: Blob, filename: string, contentType: string): Promise<void> {
   const form = new FormData();
   form.append('file', new File([file], filename, { type: contentType }));
-  const token = getToken();
   const res = await fetch(`${BASE}/expenses/${id}/photo`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+    headers: csrfHeaders(),
     body: form,
   });
   if (!res.ok) {
@@ -274,12 +274,9 @@ export async function apiDeleteExpensePhoto(id: string): Promise<void> {
   await request<void>('DELETE', `/expenses/${id}/photo`, undefined, true);
 }
 
-/** La foto exige Bearer → fetch con header + createObjectURL (no <img src=…token>). */
+/** La foto se carga autenticada por cookie sin poner sesión en la URL. */
 export async function fetchExpensePhotoUrl(id: string): Promise<{ url: string; revoke: () => void }> {
-  const token = getToken();
-  const res = await fetch(`${BASE}/expenses/${id}/photo`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const res = await fetch(`${BASE}/expenses/${id}/photo`, { credentials: 'include' });
   if (!res.ok) throw new Error(tNow('error.photoLoad'));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

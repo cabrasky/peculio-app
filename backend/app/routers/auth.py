@@ -3,12 +3,14 @@ import secrets
 import re
 import base64
 import hashlib
+import hmac
+from urllib.parse import urlsplit
 from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from jose import jwt
 from sqlalchemy import select
@@ -41,13 +43,67 @@ from app.schemas.schemas import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+SESSION_COOKIE = "peculio_session"
+CSRF_COOKIE = "peculio_csrf"
+OAUTH_STATE_COOKIE = "peculio_oauth_state"
+COOKIE_SECURE = settings.frontend_url.startswith("https://")
+
+
+def _csrf_for_token(token: str) -> str:
+    return hmac.new(settings.jwt_secret.encode(), ("csrf:" + token).encode(), hashlib.sha256).hexdigest()
+
+
+def _set_web_cookies(response: Response, token: str) -> None:
+    common = {"secure": COOKIE_SECURE, "samesite": "lax", "max_age": settings.jwt_expire_minutes * 60}
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, path="/api", **common)
+    response.set_cookie(CSRF_COOKIE, _csrf_for_token(token), httponly=False, path="/", **common)
+    response.headers["Cache-Control"] = "no-store"
+
+
+def _clear_web_cookies(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/api", secure=COOKIE_SECURE, samesite="lax")
+    response.delete_cookie(CSRF_COOKIE, path="/", secure=COOKIE_SECURE, samesite="lax")
+
+
+def _web_auth_response(request: Request, response: Response, token: str, user: User) -> AuthResponse:
+    if request.headers.get("X-Peculio-Web-Session") == "1":
+        _check_web_origin(request)
+        _set_web_cookies(response, token)
+        return AuthResponse(token="", user=UserOut.model_validate(user))
+    # Mobile and existing API clients retain the Bearer contract.
+    return AuthResponse(token=token, user=UserOut.model_validate(user))
+
+
+def _check_web_origin(request: Request) -> None:
+    """Prevent cross-site login/logout and cookie-backed unsafe writes."""
+    origin = request.headers.get("origin")
+    allowed = {settings.frontend_url.rstrip("/"), "https://peculio.cabrasky.net", "https://suelto.cabrasky.net"}
+    if origin and origin.rstrip("/") not in allowed:
+        raise HTTPException(status_code=403, detail="Invalid origin")
+
+
+def _check_csrf(request: Request, token: str) -> None:
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    _check_web_origin(request)
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    header = request.headers.get("X-CSRF-Token", "")
+    expected = _csrf_for_token(token)
+    if not cookie or not header or not hmac.compare_digest(cookie, expected) or not hmac.compare_digest(header, expected):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+
 def _is_allowed_redirect(url: str) -> bool:
-    """Solo destinos propios: la web o el deep link de la app móvil."""
-    return bool(url) and (
-        url.startswith(settings.frontend_url)
-        or url.startswith("peculioapp://")
-        or url.startswith("sueltoapp://")  # APKs anteriores al cambio de nombre
-    )
+    """Same web origin or the two supported mobile deep-link schemes."""
+    if not url:
+        return False
+    target, frontend = urlsplit(url), urlsplit(settings.frontend_url)
+    if target.scheme in ("peculioapp", "sueltoapp"):
+        return (target.netloc == "oauth" and not target.path and not target.query
+                and not target.fragment and not target.username and not target.password)
+    return (target.scheme == frontend.scheme and target.hostname == frontend.hostname
+            and target.port == frontend.port and not target.username and not target.password)
+
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,9 +145,12 @@ async def get_current_user(
 
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    token = auth.split(" ", 1)[1]
+        token = request.cookies.get(SESSION_COOKIE, "")
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        _check_csrf(request, token)
+    else:
+        token = auth.split(" ", 1)[1]
     payload = _verify_jwt(token)
     if payload is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -175,7 +234,7 @@ async def require_developer(
 # ── Auth Endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=AuthResponse)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(body: RegisterRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Register a new user with email + password."""
     email = body.email.strip().lower()
     password = body.password
@@ -204,14 +263,11 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     token = _make_jwt(user.id, user.email, user.is_admin)
-    return AuthResponse(
-        token=token,
-        user=UserOut.model_validate(user),
-    )
+    return _web_auth_response(request, response, token, user)
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Login with email + password."""
     email = body.email.strip().lower()
     password = body.password
@@ -230,20 +286,26 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     user.last_login = datetime.utcnow()
     token = _make_jwt(user.id, user.email, user.is_admin)
-    return AuthResponse(
-        token=token,
-        user=UserOut.model_validate(user),
-    )
+    return _web_auth_response(request, response, token, user)
 
 
 @router.post("/demo", response_model=AuthResponse)
-async def demo_login(db: AsyncSession = Depends(get_db)):
+async def demo_login(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     """Entra con la cuenta demo compartida (datos de ejemplo que se reinician solos)."""
     if not DEMO_ENABLED:
         raise HTTPException(status_code=404, detail="Demo not available")
     user = await get_demo_user(db)
     token = _make_jwt(user.id, user.email, False)
-    return AuthResponse(token=token, user=UserOut.model_validate(user))
+    return _web_auth_response(request, response, token, user)
+
+
+@router.post("/logout", status_code=204)
+async def logout(request: Request, response: Response):
+    _check_web_origin(request)
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        _check_csrf(request, token)
+    _clear_web_cookies(response)
 
 
 @router.get("/google")
@@ -271,7 +333,8 @@ async def google_login(
 
     # El destino final viaja en `state` (Google solo devuelve state + code)
     target = redirect_to if _is_allowed_redirect(redirect_to) else settings.frontend_url
-    state = f"{secrets.token_urlsafe(16)}.{base64.urlsafe_b64encode(target.encode()).decode()}"
+    nonce = secrets.token_urlsafe(24)
+    state = f"{nonce}.{base64.urlsafe_b64encode(target.encode()).decode()}"
 
     params = {
         "client_id": config.client_id,
@@ -282,11 +345,15 @@ async def google_login(
         "access_type": "offline",
     }
     qs = "&".join(f"{k}={v}" for k, v in params.items())
-    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{qs}")
+    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{qs}")
+    redirect.set_cookie(OAUTH_STATE_COOKIE, nonce, httponly=True, secure=COOKIE_SECURE,
+                        samesite="lax", path="/api/auth/google/callback", max_age=600)
+    return redirect
 
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str = "",
     state: str = "",
     error: str = "",
@@ -297,6 +364,9 @@ async def google_callback(
         raise HTTPException(status_code=400, detail=f"Google OAuth error: {error}")
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code is missing")
+    nonce = request.cookies.get(OAUTH_STATE_COOKIE, "")
+    if not state or not nonce or not hmac.compare_digest(state.split(".", 1)[0], nonce):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     result = await db.execute(
         select(OAuthConfig).where(OAuthConfig.provider == "google")
@@ -379,9 +449,17 @@ async def google_callback(
                     pass
             sep = "&" if "?" in target else "?"
             if user.suspended_at is not None:
-                return RedirectResponse(f"{target}{sep}error=suspended")
-            token = _make_jwt(user.id, user.email, user.is_admin)
-            return RedirectResponse(f"{target}{sep}token={token}")
+                redirect = RedirectResponse(f"{target}{sep}error=suspended", status_code=303)
+            else:
+                token = _make_jwt(user.id, user.email, user.is_admin)
+                if urlsplit(target).scheme in ("peculioapp", "sueltoapp"):
+                    redirect = RedirectResponse(f"{target}{sep}token={token}", status_code=303)
+                else:
+                    redirect = RedirectResponse(target, status_code=303)
+                    _set_web_cookies(redirect, token)
+            redirect.delete_cookie(OAUTH_STATE_COOKIE, path="/api/auth/google/callback",
+                                   secure=COOKIE_SECURE, samesite="lax")
+            return redirect
 
     except HTTPException:
         raise
