@@ -16,7 +16,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.database import get_db
 from app.models.models import Expense, User
-from app.routers.auth import _verify_jwt
+from app.routers.auth import get_current_user, _verify_jwt
 
 router = APIRouter(prefix="/excel", tags=["excel"])
 
@@ -176,10 +176,10 @@ def _build_workbook(rows: Optional[list[dict]] = None) -> Workbook:
 
 
 async def _current_user(request: Request, db: AsyncSession) -> User:
-    auth = request.headers.get("Authorization", "")
-    token = (auth.split(" ", 1)[1] if auth.startswith("Bearer ") else "") or (request.query_params.get("token") or "")
+    token = request.query_params.get("token") or ""
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        return await get_current_user(request, db)
+    # Legacy mobile download URLs; web exports no longer put JWTs in query strings.
     payload = _verify_jwt(token)
     if not payload or not payload.get("sub"):
         raise HTTPException(status_code=401, detail="Invalid or expired token")

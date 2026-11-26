@@ -41,6 +41,7 @@ DEMO_READ_ONLY = "Not available in the demo account"
 _ALLOWED_WRITES = {
     ("PUT", "/api/auth/me/preferences"),
     ("POST", "/api/auth/demo"),
+    ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/forgot-password"),
@@ -57,10 +58,11 @@ def is_demo(user: User | None) -> bool:
 
 def _token_is_demo(request: Request) -> bool:
     auth = request.headers.get("Authorization", "")
-    if not auth[:7].lower() == "bearer ":
+    token = auth[7:].strip() if auth[:7].lower() == "bearer " else request.cookies.get("peculio_session", "")
+    if not token:
         return False
     try:
-        payload = jwt.decode(auth[7:].strip(), settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except Exception:
         return False  # token inválido: ya lo rechazará el endpoint con 401
     return (payload.get("email") or "").lower() == DEMO_EMAIL

@@ -86,10 +86,11 @@ const en: LegalDocs = {
           '**mb_weekly_goal**: the weekly budget used in the summary.',
         ],
       ] },
-      { h: 'Local storage', p: [
-        'While you are logged in, the browser’s local storage is also used. These are not cookies and are not sent to the server on their own:',
+      { h: 'Local storage and cookies', p: [
+        'The website uses a session cookie and keeps a local copy of your data in the browser:',
         [
-          '**gastos_token**: your session, so you don’t have to sign in on every visit. It lasts until you log out.',
+          '**peculio_session**: an HttpOnly, Secure and SameSite session cookie; JavaScript cannot read your token. It expires after at most 24 hours and is removed on logout.',
+          '**peculio_csrf**: a security cookie readable by the website to protect changes to your account. It expires with the session.',
           '**gastos_user**: your name and preferences, to show them right away. It lasts until you log out.',
           '**gastos_app_data**: a copy of your data so the app loads fast. It is deleted when you log out or delete your account.',
         ],

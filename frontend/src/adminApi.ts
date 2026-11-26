@@ -1,5 +1,5 @@
 /* ── Soporte técnico y panel de admin (uso, usuarios, soporte, sistema, APK) ─ */
-import { request, BASE, getToken, type SmtpTestResult } from './api';
+import { request, BASE, csrfHeaders, type SmtpTestResult } from './api';
 
 /* Soporte (usuario) */
 
@@ -167,7 +167,8 @@ export async function adminApkUpload(
     for (let offset = 0; offset < file.size; offset += init.chunk_bytes) {
       const res = await fetch(`${BASE}/admin/apk/uploads/${init.id}?offset=${offset}`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/octet-stream' },
+        credentials: 'include',
+        headers: { ...csrfHeaders(), 'Content-Type': 'application/octet-stream' },
         body: file.slice(offset, offset + init.chunk_bytes),
       });
       if (!res.ok) {
