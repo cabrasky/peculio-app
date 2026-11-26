@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import engine, Base, async_session_factory
 from app.schema_sync import run_alembic_upgrade, sync_missing_columns
 from app.models.models import User
-from app.routers import auth, expenses, incomes, goals, subscriptions, projects, categories, excel, developer, admin, support, apk
+from app.routers import auth, expenses, incomes, investments, goals, subscriptions, projects, categories, excel, developer, admin, support, apk
 from app.services.demo import demo_read_only
 from app.services.errors import record_server_error
 
@@ -162,6 +162,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
 app.include_router(incomes.router, prefix="/api")
+app.include_router(investments.router, prefix="/api")
 app.include_router(goals.router, prefix="/api")
 app.include_router(subscriptions.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")

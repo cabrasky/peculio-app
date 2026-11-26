@@ -12,6 +12,7 @@ import { PreferencesProvider, usePreferences } from './PreferencesContext';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import IncomesPage from './components/Incomes';
+import InvestmentsPage from './components/InvestmentsPage';
 import GoalsPage from './components/Goals';
 import MoreMenu from './components/MoreMenu';
 import MonthlySummary from './components/MonthlySummary';
@@ -180,6 +181,7 @@ function AppContent() {
       <Route path="/expenses" element={
         <ExpenseList expenses={data.expenses} onEdit={handleEdit} onDelete={handleDelete} compact={layout === 'mobile'} />
       } />
+      <Route path="/investments" element={<InvestmentsPage />} />
       <Route path="/incomes" element={
         <IncomesPage incomes={data.incomes} onRefresh={refresh} />
       } />
