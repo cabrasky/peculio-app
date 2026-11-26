@@ -23,6 +23,7 @@ import {
 } from './syncQueue';
 import type { SyncKind, SyncOperation } from './syncQueue';
 export { getSyncStatus } from './syncQueue';
+import { advanceBillingDate } from './localDate';
 
 const STORAGE_KEY = 'gastos_app_data';
 
@@ -521,14 +522,7 @@ export function deleteSubscription(id: string) {
 
 export function advanceSubscription(sub: Subscription): Subscription {
   if (blockedInDemo()) return sub;
-  const next = new Date(sub.nextBilling + 'T12:00:00');
-  switch (sub.billingCycle) {
-    case 'weekly': next.setDate(next.getDate() + 7); break;
-    case 'monthly': next.setMonth(next.getMonth() + 1); break;
-    case 'quarterly': next.setMonth(next.getMonth() + 3); break;
-    case 'yearly': next.setFullYear(next.getFullYear() + 1); break;
-  }
-  const updated = { ...sub, nextBilling: next.toISOString().slice(0, 10) };
+  const updated = { ...sub, nextBilling: advanceBillingDate(sub.nextBilling, sub.billingCycle) };
   updateSubscription(sub.id, { nextBilling: updated.nextBilling });
   return updated;
 }

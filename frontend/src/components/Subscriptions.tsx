@@ -7,6 +7,7 @@ import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheckCircle
 } from './Icons';
 import { eur } from '../format';
+import { todayLocalISO } from '../localDate';
 
 interface Props {
   subscriptions: Subscription[];
@@ -27,7 +28,7 @@ export default function SubscriptionsPage({ subscriptions, onRefresh }: Props) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState(0);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'weekly' | 'quarterly'>('monthly');
-  const [nextBilling, setNextBilling] = useState(() => new Date().toISOString().slice(0, 10));
+  const [nextBilling, setNextBilling] = useState(todayLocalISO);
   const [category, setCategory] = useState('');
   const [metodo, setMetodo] = useState('Tarjeta');
   const [notes, setNotes] = useState('');
@@ -62,7 +63,7 @@ export default function SubscriptionsPage({ subscriptions, onRefresh }: Props) {
     setName('');
     setAmount(0);
     setBillingCycle('monthly');
-    setNextBilling(new Date().toISOString().slice(0, 10));
+    setNextBilling(todayLocalISO());
     setCategory('');
     setMetodo('Tarjeta');
     setNotes('');
@@ -102,7 +103,7 @@ export default function SubscriptionsPage({ subscriptions, onRefresh }: Props) {
   };
 
   const handleMarkPaid = (s: Subscription) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     addExpense({
       date: today,
       desc: s.name + (s.category ? ` (${s.category})` : ''),

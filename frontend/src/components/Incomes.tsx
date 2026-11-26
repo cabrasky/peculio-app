@@ -5,6 +5,7 @@ import type { Income } from '../types';
 import { addIncome, updateIncome, deleteIncome } from '../store';
 import { IconPlus, IconX, IconEdit, IconTrash, IconSearch } from './Icons';
 import { eur } from '../format';
+import { todayLocalISO } from '../localDate';
 import { CHART, SERIES } from '../palette';
 
 interface Props {
@@ -16,7 +17,7 @@ export default function IncomesPage({ incomes, onRefresh }: Props) {
   const { t } = useLocale();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO);
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState(0);
   const [category, setCategory] = useState('Salario');
@@ -49,7 +50,7 @@ export default function IncomesPage({ incomes, onRefresh }: Props) {
 
   const openNew = () => {
     setEditing(null);
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayLocalISO());
     setDesc(''); setAmount(0); setCategory('Salario'); setNotes('');
     setFormError('');
     setShowForm(true);
