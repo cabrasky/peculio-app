@@ -7,6 +7,7 @@ import RichText from './RichText';
 import { detectSplit, equalShares, frequentPeople, personasOf, repaySummary, serializePersonas, type Persona } from '../personas';
 import { catColor } from '../categoryColors';
 import { eur } from '../format';
+import { todayLocalISO } from '../localDate';
 import { IconSparkle, IconX } from './Icons';
 
 interface Props {
@@ -28,10 +29,9 @@ const numTxt = (n: number) => (n ? round2(n).toFixed(2).replace('.', ',') : '');
 export default function AddExpense({ isOpen, editExpense, onClose, onSaved, presetProjectId = '' }: Props) {
   const { t } = useLocale();
   const isEdit = !!editExpense;
-  const today = new Date().toISOString().slice(0, 10);
   const projects = loadData().projects;
 
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(todayLocalISO);
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState(0);
   const [proposito, setProposito] = useState('');
@@ -97,7 +97,7 @@ export default function AddExpense({ isOpen, editExpense, onClose, onSaved, pres
       setViaje(editExpense.viaje || '');
       setShowShared(!!(editExpense.ajeno || editExpense.deudores || editExpense.devuelto === 'yes' || editExpense.viaje || ps.length));
     } else {
-      setDate(today);
+      setDate(todayLocalISO());
       setDesc('');
       setAmount(0);
       setProposito('');
