@@ -97,6 +97,7 @@ export default function Dashboard({ expenses, incomes, goals, subscriptions }: P
         <div className="xg-tile hero">
           <span className="xg-tile-label">{t('dashboard.balance')}</span>
           <span className="xg-tile-value num">{signed(stats.balance)}</span>
+          <span className="xg-tile-sub">Resultado de ingresos menos gastos registrados (no saldo bancario; las transferencias nuevas se muestran aparte).</span>
           <span className="xg-tile-sub">{eur(stats.totalIncomes, 0)} {t('dashboard.earned')} · {eur(stats.totalExpenses, 0)} {t('dashboard.spent')}</span>
         </div>
         <button type="button" className="xg-tile clickable" onClick={() => navigate('/incomes')}>

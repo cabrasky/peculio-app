@@ -62,6 +62,17 @@ export async function request<T>(method: string, path: string, body?: unknown, a
   return res.json();
 }
 
+export interface InvestmentMovement {
+  id: string; user_id: string; date: string; asset: string;
+  kind: 'contribution' | 'withdrawal' | 'sale' | 'transfer';
+  amount: number; fee: number; cost_basis: number | null; notes: string;
+  net_received: number | null; realized_gain: number | null;
+}
+export type InvestmentDraft = Omit<InvestmentMovement, 'id' | 'user_id' | 'net_received' | 'realized_gain'>;
+export const apiListInvestments = () => request<InvestmentMovement[]>('GET', '/investments', undefined, true);
+export const apiCreateInvestment = (body: InvestmentDraft) => request<InvestmentMovement>('POST', '/investments', body, true);
+export const apiDeleteInvestment = (id: string) => request<void>('DELETE', `/investments/${encodeURIComponent(id)}`, undefined, true);
+
 /* ── Auth API ──────────────────────────────────────────────────────────────── */
 
 // Preferencias de la cuenta (compartidas con la app móvil)

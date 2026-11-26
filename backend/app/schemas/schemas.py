@@ -2,7 +2,7 @@
 import datetime as _dt
 from datetime import date, datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -273,6 +273,34 @@ class IncomeOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# ── Investment movements ────────────────────────────────────────────────────
+
+class InvestmentMovementCreate(BaseModel):
+    date: _dt.date
+    asset: str = Field(min_length=1, max_length=128)
+    kind: Literal["contribution", "withdrawal", "sale", "transfer"]
+    amount: float = Field(gt=0, allow_inf_nan=False)
+    fee: float = Field(default=0, ge=0, allow_inf_nan=False)
+    cost_basis: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    notes: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_sale(self):
+        if self.kind != "sale" and (self.fee != 0 or self.cost_basis is not None):
+            raise ValueError("Fees and cost basis belong only to a sale")
+        if self.fee >= self.amount:
+            raise ValueError("Fee must be less than gross amount")
+        return self
+
+class InvestmentMovementOut(InvestmentMovementCreate):
+    id: str
+    user_id: str
+    created_at: datetime
+    net_received: Optional[float] = None
+    realized_gain: Optional[float] = None
+
+    model_config = {"from_attributes": True}
 
 # ── Goals ─────────────────────────────────────────────────────────────────────
 

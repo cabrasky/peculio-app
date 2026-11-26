@@ -138,6 +138,21 @@ class Income(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class InvestmentMovement(Base):
+    """Capital transfers and investment sales, separate from consumption and wages."""
+    __tablename__ = "investment_movements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    asset: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)  # contribution, withdrawal, sale, transfer
+    amount: Mapped[float] = mapped_column(Float, nullable=False)  # gross proceeds for sales
+    fee: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    cost_basis: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 class Goal(Base):
     __tablename__ = "goals"
 
